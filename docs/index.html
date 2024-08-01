@@ -17,6 +17,15 @@
         .link { stroke: #999; stroke-opacity: 0.6; }
         .node-text { font-size: 12px; }
         .os-reserved { fill: #ffcccc; }
+        .tooltip {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 5px;
+            border: 1px solid #999;
+            border-radius: 5px;
+            pointer-events: none;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -69,6 +78,12 @@
             const availableMemory = memory - 1;
             const cpusPerExecutor = Math.floor(availableCPUs / executors);
             const memoryPerExecutor = Math.floor(availableMemory / executors);
+            const memoryPerTask = memoryPerExecutor / tasks;
+
+            // Create tooltip
+            const tooltip = d3.select("body").append("div")
+                .attr("class", "tooltip")
+                .style("opacity", 0);
 
             // Driver node
             const driver = svg.append("g")
@@ -168,7 +183,20 @@
                             .attr("y", taskY)
                             .attr("width", executorWidth - 20)
                             .attr("height", 25)
-                            .attr("class", "node task");
+                            .attr("class", "node task")
+                            .on("mouseover", function(event) {
+                                tooltip.transition()
+                                    .duration(200)
+                                    .style("opacity", .9);
+                                tooltip.html(`Task Memory: ${memoryPerTask.toFixed(2)}G`)
+                                    .style("left", (event.pageX + 10) + "px")
+                                    .style("top", (event.pageY - 28) + "px");
+                            })
+                            .on("mouseout", function() {
+                                tooltip.transition()
+                                    .duration(500)
+                                    .style("opacity", 0);
+                            });
 
                         executor.append("text")
                             .attr("x", executorWidth / 2)
