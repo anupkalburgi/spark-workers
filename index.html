@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Responsive Spark Engine Configuration Visualizer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        #inputs { margin-bottom: 20px; }
+        label, input { display: inline-block; margin: 5px; }
+        input { padding: 5px; }
+        #diagram { border: 1px solid #ccc; padding: 20px; overflow: auto; }
+        .node { fill: #f0f0f0; stroke: #333; stroke-width: 2px; }
+        .executor { fill: #d1e7dd; }
+        .task { fill: #cfe2ff; }
+        .link { stroke: #999; stroke-opacity: 0.6; }
+        .node-text { font-size: 12px; }
+        .os-reserved { fill: #ffcccc; }
+    </style>
+</head>
+<body>
+    <h1>Responsive Spark Engine Configuration Visualizer</h1>
+    <div id="inputs">
+        <label for="workers">Number of Workers:</label>
+        <input type="number" id="workers" value="2" min="1" max="5">
+        <label for="cpus">CPUs per Worker:</label>
+        <input type="number" id="cpus" value="5" min="2" max="16">
+        <label for="memory">Memory per Worker (GB):</label>
+        <input type="number" id="memory" value="16" min="2" max="128">
+        <label for="executors">Executors per Worker:</label>
+        <input type="number" id="executors" value="2" min="1" max="4">
+        <label for="tasks">Tasks per Executor:</label>
+        <input type="number" id="tasks" value="5" min="1" max="10">
+        <button onclick="updateDiagram()">Update Diagram</button>
+    </div>
+    <div id="diagram"></div>
+
+    <script>
+        function updateDiagram() {
+            const workers = parseInt(document.getElementById('workers').value);
+            const cpus = parseInt(document.getElementById('cpus').value);
+            const memory = parseInt(document.getElementById('memory').value);
+            const executors = parseInt(document.getElementById('executors').value);
+            const tasks = parseInt(document.getElementById('tasks').value);
+
+            // Calculate dimensions
+            const margin = { top: 40, right: 40, bottom: 40, left: 40 };
+            const driverWidth = 200;
+            const driverHeight = 80;
+            const executorWidth = 220;
+            const executorHeight = Math.max(140, 40 + tasks * 30);
+            const executorMargin = 20;
+            const workerInfoWidth = 180;
+            const workerWidth = Math.max(800, workerInfoWidth + executors * (executorWidth + executorMargin) + executorMargin);
+            const workerHeight = Math.max(200, executorHeight + 60);
+            const width = margin.left + workerWidth + margin.right;
+            const height = margin.top + driverHeight + 60 + (workers * (workerHeight + 60)) + margin.bottom;
+
+            d3.select("#diagram").selectAll("*").remove();
+
+            const svg = d3.select("#diagram")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            // Calculate available resources after OS reservation
+            const availableCPUs = cpus - 1;
+            const availableMemory = memory - 1;
+            const cpusPerExecutor = Math.floor(availableCPUs / executors);
+            const memoryPerExecutor = Math.floor(availableMemory / executors);
+
+            // Driver node
+            const driver = svg.append("g")
+                .attr("transform", `translate(${margin.left + (workerWidth - driverWidth) / 2}, ${margin.top})`);
+
+            driver.append("rect")
+                .attr("width", driverWidth)
+                .attr("height", driverHeight)
+                .attr("class", "node");
+
+            driver.append("text")
+                .attr("x", driverWidth / 2)
+                .attr("y", 30)
+                .attr("text-anchor", "middle")
+                .text("Driver")
+                .attr("class", "node-text");
+
+            driver.append("text")
+                .attr("x", driverWidth / 2)
+                .attr("y", 50)
+                .attr("text-anchor", "middle")
+                .text("8G RAM, 2 Cores")
+                .attr("class", "node-text");
+
+            // Worker nodes
+            for (let i = 0; i < workers; i++) {
+                const workerY = margin.top + driverHeight + 60 + i * (workerHeight + 60);
+                const worker = svg.append("g")
+                    .attr("transform", `translate(${margin.left}, ${workerY})`);
+
+                // Worker box
+                worker.append("rect")
+                    .attr("width", workerWidth)
+                    .attr("height", workerHeight)
+                    .attr("class", "node");
+
+                worker.append("text")
+                    .attr("x", 90)
+                    .attr("y", 30)
+                    .attr("text-anchor", "middle")
+                    .text(`Worker ${i+1}`)
+                    .attr("class", "node-text");
+
+                worker.append("text")
+                    .attr("x", 90)
+                    .attr("y", 50)
+                    .attr("text-anchor", "middle")
+                    .text(`${memory}G RAM, ${cpus} CPUs`)
+                    .attr("class", "node-text");
+
+                // OS Reserved box
+                worker.append("rect")
+                    .attr("x", 10)
+                    .attr("y", 70)
+                    .attr("width", 160)
+                    .attr("height", 40)
+                    .attr("class", "os-reserved");
+
+                worker.append("text")
+                    .attr("x", 90)
+                    .attr("y", 95)
+                    .attr("text-anchor", "middle")
+                    .text("OS Reserved: 1G RAM, 1 CPU")
+                    .attr("class", "node-text");
+
+                // Executor boxes
+                for (let j = 0; j < executors; j++) {
+                    const executorX = workerInfoWidth + j * (executorWidth + executorMargin);
+                    const executor = worker.append("g")
+                        .attr("transform", `translate(${executorX}, 20)`);
+                    
+                    executor.append("rect")
+                        .attr("width", executorWidth)
+                        .attr("height", executorHeight)
+                        .attr("class", "node executor");
+
+                    executor.append("text")
+                        .attr("x", executorWidth / 2)
+                        .attr("y", 20)
+                        .attr("text-anchor", "middle")
+                        .text(`Executor ${j+1}`)
+                        .attr("class", "node-text");
+
+                    executor.append("text")
+                        .attr("x", executorWidth / 2)
+                        .attr("y", 40)
+                        .attr("text-anchor", "middle")
+                        .text(`${memoryPerExecutor}G RAM, ${cpusPerExecutor} CPUs`)
+                        .attr("class", "node-text");
+
+                    // Task boxes
+                    for (let k = 0; k < tasks; k++) {
+                        const taskY = 60 + k * 30;
+
+                        executor.append("rect")
+                            .attr("x", 10)
+                            .attr("y", taskY)
+                            .attr("width", executorWidth - 20)
+                            .attr("height", 25)
+                            .attr("class", "node task");
+
+                        executor.append("text")
+                            .attr("x", executorWidth / 2)
+                            .attr("y", taskY + 17)
+                            .attr("text-anchor", "middle")
+                            .text(`Task ${k+1}`)
+                            .attr("class", "node-text");
+                    }
+                }
+
+                // Connection line from Driver to Worker
+                svg.append("line")
+                    .attr("x1", margin.left + workerWidth / 2)
+                    .attr("y1", margin.top + driverHeight)
+                    .attr("x2", margin.left + workerWidth / 2)
+                    .attr("y2", workerY)
+                    .attr("stroke", "#999")
+                    .attr("stroke-width", 2);
+            }
+        }
+
+        updateDiagram();
+    </script>
+</body>
+</html>
